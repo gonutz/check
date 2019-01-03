@@ -1,7 +1,6 @@
 package check
 
 import (
-	"fmt"
 	"math"
 	"reflect"
 	"testing"
@@ -26,7 +25,6 @@ func Eq(t *testing.T, a, b interface{}) {
 // deepEqual is a modified version of reflect.DeepEqual. deepEqual compares
 // float and complex values using Eps.
 func deepEqual(x, y interface{}) bool {
-	fmt.Println("deepEqual", x, y)
 	if x == nil || y == nil {
 		return x == y
 	}
@@ -94,7 +92,6 @@ func deepValueEqual(v1, v2 reflect.Value, visited map[visit]bool, depth int) boo
 		}
 		return true
 	case reflect.Slice:
-		fmt.Println("slice")
 		if v1.IsNil() != v2.IsNil() {
 			return false
 		}
@@ -121,7 +118,6 @@ func deepValueEqual(v1, v2 reflect.Value, visited map[visit]bool, depth int) boo
 		}
 		return deepValueEqual(v1.Elem(), v2.Elem(), visited, depth+1)
 	case reflect.Struct:
-		fmt.Println("struct")
 		for i, n := 0, v1.NumField(); i < n; i++ {
 			if !deepValueEqual(v1.Field(i), v2.Field(i), visited, depth+1) {
 				return false
