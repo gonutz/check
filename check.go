@@ -43,10 +43,60 @@ func deepEqual(x, y interface{}, epsilon float64) bool {
 	}
 	v1 := reflect.ValueOf(x)
 	v2 := reflect.ValueOf(y)
-	if v1.Type() != v2.Type() {
-		return false
+	if v1.Type() == v2.Type() {
+		return deepValueEqual(v1, v2, epsilon, make(map[visit]bool), 0)
 	}
-	return deepValueEqual(v1, v2, epsilon, make(map[visit]bool), 0)
+	// in case we have different types, we might still be able to check them,
+	// e.g. compare float32 and float64 or uint8 and uint16
+	if isInteger(v1.Type().Kind()) && isInteger(v2.Type().Kind()) {
+		return toUint64(v1) == toUint64(v2)
+	}
+	if isFloat(v1.Type().Kind()) && isFloat(v1.Type().Kind()) {
+		return floatEq(v1.Float(), v2.Float(), epsilon)
+	}
+	if isComplex(v1.Type().Kind()) && isComplex(v1.Type().Kind()) {
+		c1 := v1.Complex()
+		c2 := v2.Complex()
+		return floatEq(real(c1), real(c2), epsilon) &&
+			floatEq(imag(c1), imag(c2), epsilon)
+	}
+	return false
+}
+
+func isInteger(k reflect.Kind) bool {
+	return isSignedInteger(k) || isUnsignedInteger(k)
+}
+
+func isSignedInteger(k reflect.Kind) bool {
+	return k == reflect.Int ||
+		k == reflect.Int8 ||
+		k == reflect.Int16 ||
+		k == reflect.Int32 ||
+		k == reflect.Int64
+}
+
+func isUnsignedInteger(k reflect.Kind) bool {
+	return k == reflect.Uint ||
+		k == reflect.Uint8 ||
+		k == reflect.Uint16 ||
+		k == reflect.Uint32 ||
+		k == reflect.Uint64 ||
+		k == reflect.Uintptr
+}
+
+func toUint64(v reflect.Value) uint64 {
+	if isSignedInteger(v.Type().Kind()) {
+		return uint64(v.Int())
+	}
+	return v.Uint()
+}
+
+func isFloat(k reflect.Kind) bool {
+	return k == reflect.Float32 || k == reflect.Float64
+}
+
+func isComplex(k reflect.Kind) bool {
+	return k == reflect.Complex64 || k == reflect.Complex128
 }
 
 type visit struct {
