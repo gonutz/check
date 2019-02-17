@@ -48,22 +48,32 @@ func deepEqual(x, y interface{}, epsilon float64) bool {
 	}
 	// in case we have different types, we might still be able to check them,
 	// e.g. compare float32 and float64 or uint8 and uint16
-	if isInteger(v1.Type().Kind()) && isInteger(v2.Type().Kind()) {
+	if isInteger(v1) && isInteger(v2) {
 		return toUint64(v1) == toUint64(v2)
 	}
-	if isFloat(v1.Type().Kind()) && isFloat(v1.Type().Kind()) {
+	if isFloat(v1) && isFloat(v1) {
 		return floatEq(v1.Float(), v2.Float(), epsilon)
 	}
-	if isComplex(v1.Type().Kind()) && isComplex(v1.Type().Kind()) {
+	if isComplex(v1) && isComplex(v1) {
 		c1 := v1.Complex()
 		c2 := v2.Complex()
 		return floatEq(real(c1), real(c2), epsilon) &&
 			floatEq(imag(c1), imag(c2), epsilon)
 	}
+	// check for integer to float comparison, make the integer be v1
+	if isInteger(v2) {
+		v1, v2 = v2, v1
+	}
+	if isInteger(v1) && isFloat(v2) {
+		f1 := float64(toUint64(v1))
+		f2 := v2.Float()
+		return floatEq(f1, f2, epsilon)
+	}
 	return false
 }
 
-func isInteger(k reflect.Kind) bool {
+func isInteger(v reflect.Value) bool {
+	k := v.Type().Kind()
 	return isSignedInteger(k) || isUnsignedInteger(k)
 }
 
@@ -91,11 +101,13 @@ func toUint64(v reflect.Value) uint64 {
 	return v.Uint()
 }
 
-func isFloat(k reflect.Kind) bool {
+func isFloat(v reflect.Value) bool {
+	k := v.Type().Kind()
 	return k == reflect.Float32 || k == reflect.Float64
 }
 
-func isComplex(k reflect.Kind) bool {
+func isComplex(v reflect.Value) bool {
+	k := v.Type().Kind()
 	return k == reflect.Complex64 || k == reflect.Complex128
 }
 
