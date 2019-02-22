@@ -35,6 +35,34 @@ func EqEps(t *testing.T, a, b interface{}, epsilon float64) {
 	}
 }
 
+// Neq compares a and b and calls Errorf on t if they are equal. Values are
+// compared in a deep way, similar to reflect.DeepEqual, only that float and
+// complex values are compared using an epsilon of 1e-6.
+func Neq(t *testing.T, a, b interface{}) {
+	t.Helper()
+	NeqEps(t, a, b, 1e-6)
+}
+
+// NeqExact compares a and b and calls Errorf on t if they are equal. Values are
+// compared in a deep way, similar to reflect.DeepEqual, float and complex
+// values must match exactly.
+func NeqExact(t *testing.T, a, b interface{}) {
+	t.Helper()
+	NeqEps(t, a, b, 0)
+}
+
+// NeqEps compares a and b and calls Errorf on t if they are equal. Values are
+// compared in a deep way, similar to reflect.DeepEqual, only that float and
+// complex values are compared using epsilon. Values are considered equal if
+// their absolute difference is less than or equal to epsilon. Set epsilon to
+// zero to compare for exact equality (or use EqExact).
+func NeqEps(t *testing.T, a, b interface{}, epsilon float64) {
+	t.Helper()
+	if deepEqual(a, b, epsilon) {
+		t.Errorf("%#v == %#v", a, b)
+	}
+}
+
 // deepEqual is a modified version of reflect.DeepEqual. deepEqual compares
 // float and complex values using epsilon.
 func deepEqual(x, y interface{}, epsilon float64) bool {
@@ -221,8 +249,7 @@ func deepValueEqual(v1, v2 reflect.Value, eps float64, visited map[visit]bool, d
 		if v1.IsNil() && v2.IsNil() {
 			return true
 		}
-		// Can't do better than this:
-		return false
+		return v1.Pointer() == v2.Pointer()
 	case reflect.Bool:
 		return v2.Kind() == reflect.Bool && v1.Bool() == v2.Bool()
 	case reflect.Uint,

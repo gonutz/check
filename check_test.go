@@ -19,6 +19,9 @@ func TestEq(t *testing.T) {
 		f64  float64
 		c64  complex64
 		c128 complex128
+		f    = func(int, float64) bool { return true }
+		cat  cat
+		dog  dog
 	)
 	Eq(t, 0, 0)
 	Eq(t, i, 0)
@@ -35,4 +38,22 @@ func TestEq(t *testing.T) {
 	Eq(t, "abc", "abc")
 	Eq(t, make(map[int]string), make(map[int]string))
 	Eq(t, struct{}{}, struct{}{})
+	Eq(t, f, f)
+	Eq(t, cat.f, cat.f)
+	Eq(t, dog.f, dog.f)
+	EqExact(t, 1.0, 1.0)
+	NeqExact(t, 1.0, 1.00000001)
+	EqEps(t, 1.0, 1.5, 0.5)
+	NeqEps(t, 1.0, 1.5, 0.4999999)
+	Neq(t, cat.f, dog.f)
+	Neq(t, 1, 2)
+	Neq(t, "abc", "def")
 }
+
+type cat struct{}
+
+func (*cat) f() {}
+
+type dog struct{}
+
+func (*dog) f() {}
