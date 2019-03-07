@@ -1,6 +1,7 @@
 package check
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 	"testing"
@@ -10,17 +11,23 @@ import (
 // Eq compares a and b and calls Errorf on t if they differ. Values are compared
 // in a deep way, similar to reflect.DeepEqual, only that float and complex
 // values are compared using an epsilon of 1e-6.
-func Eq(t *testing.T, a, b interface{}) {
+// If there are any msg parameters, they are printed in concatenation before the
+// error message, e.g. if you pass ["input ", 5] as msg, errors will be printed
+// as: "input 5: <error>".
+func Eq(t *testing.T, a, b interface{}, msg ...interface{}) {
 	t.Helper()
-	EqEps(t, a, b, 1e-6)
+	EqEps(t, a, b, 1e-6, msg...)
 }
 
 // EqExact compares a and b and calls Errorf on t if they differ. Values are
 // compared in a deep way, similar to reflect.DeepEqual, float and complex
 // values must match exactly.
-func EqExact(t *testing.T, a, b interface{}) {
+// If there are any msg parameters, they are printed in concatenation before the
+// error message, e.g. if you pass ["input ", 5] as msg, errors will be printed
+// as: "input 5: <error>".
+func EqExact(t *testing.T, a, b interface{}, msg ...interface{}) {
 	t.Helper()
-	EqEps(t, a, b, 0)
+	EqEps(t, a, b, 0, msg...)
 }
 
 // EqEps compares a and b and calls Errorf on t if they differ. Values are
@@ -28,27 +35,36 @@ func EqExact(t *testing.T, a, b interface{}) {
 // complex values are compared using epsilon. Values are considered equal if
 // their absolute difference is less than or equal to epsilon. Set epsilon to
 // zero to compare for exact equality (or use EqExact).
-func EqEps(t *testing.T, a, b interface{}, epsilon float64) {
+// If there are any msg parameters, they are printed in concatenation before the
+// error message, e.g. if you pass ["input ", 5] as msg, errors will be printed
+// as: "input 5: <error>".
+func EqEps(t *testing.T, a, b interface{}, epsilon float64, msg ...interface{}) {
 	t.Helper()
 	if !deepEqual(a, b, epsilon) {
-		t.Errorf("%#v != %#v", a, b)
+		errorf(t, "!=", a, b, msg...)
 	}
 }
 
 // Neq compares a and b and calls Errorf on t if they are equal. Values are
 // compared in a deep way, similar to reflect.DeepEqual, only that float and
 // complex values are compared using an epsilon of 1e-6.
-func Neq(t *testing.T, a, b interface{}) {
+// If there are any msg parameters, they are printed in concatenation before the
+// error message, e.g. if you pass ["input ", 5] as msg, errors will be printed
+// as: "input 5: <error>".
+func Neq(t *testing.T, a, b interface{}, msg ...interface{}) {
 	t.Helper()
-	NeqEps(t, a, b, 1e-6)
+	NeqEps(t, a, b, 1e-6, msg...)
 }
 
 // NeqExact compares a and b and calls Errorf on t if they are equal. Values are
 // compared in a deep way, similar to reflect.DeepEqual, float and complex
 // values must match exactly.
-func NeqExact(t *testing.T, a, b interface{}) {
+// If there are any msg parameters, they are printed in concatenation before the
+// error message, e.g. if you pass ["input ", 5] as msg, errors will be printed
+// as: "input 5: <error>".
+func NeqExact(t *testing.T, a, b interface{}, msg ...interface{}) {
 	t.Helper()
-	NeqEps(t, a, b, 0)
+	NeqEps(t, a, b, 0, msg...)
 }
 
 // NeqEps compares a and b and calls Errorf on t if they are equal. Values are
@@ -56,11 +72,22 @@ func NeqExact(t *testing.T, a, b interface{}) {
 // complex values are compared using epsilon. Values are considered equal if
 // their absolute difference is less than or equal to epsilon. Set epsilon to
 // zero to compare for exact equality (or use EqExact).
-func NeqEps(t *testing.T, a, b interface{}, epsilon float64) {
+// If there are any msg parameters, they are printed in concatenation before the
+// error message, e.g. if you pass ["input ", 5] as msg, errors will be printed
+// as: "input 5: <error>".
+func NeqEps(t *testing.T, a, b interface{}, epsilon float64, msg ...interface{}) {
 	t.Helper()
 	if deepEqual(a, b, epsilon) {
-		t.Errorf("%#v == %#v", a, b)
+		errorf(t, "==", a, b, msg...)
 	}
+}
+
+func errorf(t *testing.T, op string, a, b interface{}, msg ...interface{}) {
+	var prefix string
+	if len(msg) > 0 {
+		prefix = fmt.Sprint(msg...) + ": "
+	}
+	t.Errorf("%s%#v %s %#v", prefix, a, op, b)
 }
 
 // deepEqual is a modified version of reflect.DeepEqual. deepEqual compares
