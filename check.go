@@ -83,6 +83,7 @@ func NeqEps(t *testing.T, a, b interface{}, epsilon float64, msg ...interface{})
 }
 
 func errorf(t *testing.T, op string, a, b interface{}, msg ...interface{}) {
+	t.Helper()
 	var prefix string
 	if len(msg) > 0 {
 		prefix = fmt.Sprint(msg...) + ": "
