@@ -156,3 +156,43 @@ func TestEq(t *testing.T) {
 type aer struct{ i int }
 
 func (aer) a() {}
+
+func TestEqHasMessage(t *testing.T) {
+	var tt mockTester
+	check.Eq(&tt, 1, 2, "message")
+	if tt.err != "message: 1 != 2" {
+		t.Error(tt.err)
+	}
+
+	tt.err = ""
+	check.Neq(&tt, 1, 1, "wat")
+	if tt.err != "wat: 1 == 1" {
+		t.Error(tt.err)
+	}
+}
+
+func TestEqExact(t *testing.T) {
+	var tt mockTester
+	check.EqExact(&tt, 1.0, 1.0)
+	if tt.err != "" {
+		t.Error("no error expected")
+	}
+
+	tt.err = ""
+	check.EqExact(&tt, 1.0, 1.00000001)
+	if tt.err == "" {
+		t.Error("error expected")
+	}
+
+	tt.err = ""
+	check.NeqExact(&tt, 1.0, 1.0)
+	if tt.err == "" {
+		t.Error("error expected")
+	}
+
+	tt.err = ""
+	check.NeqExact(&tt, 1.0, 1.00000001)
+	if tt.err != "" {
+		t.Error("no error expected", tt.err)
+	}
+}
