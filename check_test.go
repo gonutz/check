@@ -1,59 +1,158 @@
-package check
+package check_test
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+	"unsafe"
 
-func TestEq(t *testing.T) {
-	var (
-		i    int
-		i8   int8
-		i16  int16
-		i32  int32
-		i64  int64
-		u    uint
-		u8   uint8
-		u16  uint16
-		u32  uint32
-		u64  uint64
-		uptr uintptr
-		f32  float32
-		f64  float64
-		c64  complex64
-		c128 complex128
-		f    = func(int, float64) bool { return true }
-		cat  cat
-		dog  dog
-	)
-	Eq(t, 0, 0)
-	Eq(t, i, 0)
-	Eq(t, i16, i8)
-	Eq(t, i64, i32)
-	Eq(t, i64, i)
-	Eq(t, u64, u)
-	Eq(t, u8, u32)
-	Eq(t, uptr, u16)
-	Eq(t, 0.0, f32)
-	Eq(t, 0, f32)
-	Eq(t, f64, f32)
-	Eq(t, c64, c128)
-	Eq(t, "abc", "abc")
-	Eq(t, make(map[int]string), make(map[int]string))
-	Eq(t, struct{}{}, struct{}{})
-	Eq(t, f, f)
-	Eq(t, cat.f, cat.f)
-	Eq(t, dog.f, dog.f)
-	EqExact(t, 1.0, 1.0)
-	NeqExact(t, 1.0, 1.00000001)
-	EqEps(t, 1.0, 1.5, 0.5)
-	NeqEps(t, 1.0, 1.5, 0.4999999)
-	Neq(t, cat.f, dog.f)
-	Neq(t, 1, 2)
-	Neq(t, "abc", "def")
+	"github.com/gonutz/check"
+)
+
+type mockTester struct {
+	err string
 }
 
-type cat struct{}
+func (t *mockTester) Helper() {}
+func (t *mockTester) Errorf(format string, a ...interface{}) {
+	t.err = fmt.Sprintf(format, a...)
+}
 
-func (*cat) f() {}
+func TestEq(t *testing.T) {
+	// eq and neq make sure that check.Eq triggers/stays silent
+	eq := func(a, b interface{}) {
+		t.Helper()
+		{
+			// check Eq
+			var tt mockTester
+			check.Eq(&tt, a, b)
+			if tt.err != "" {
+				t.Errorf("%v == %v but error for Eq was %q", a, b, tt.err)
+			}
+		}
+		{
+			// check Neq
+			var tt mockTester
+			check.Neq(&tt, a, b)
+			if tt.err == "" {
+				t.Errorf("%v != %v but have no error for Neq", a, b)
+			}
+		}
+	}
+	neq := func(a, b interface{}) {
+		t.Helper()
+		{
+			var tt mockTester
+			check.Eq(&tt, a, b)
+			if tt.err == "" {
+				t.Errorf("%v != %v but have no error for Eq", a, b)
+			}
+		}
+		{
+			var tt mockTester
+			check.Neq(&tt, a, b)
+			if tt.err != "" {
+				t.Errorf("%v == %v but error for Neq was %q", a, b, tt.err)
+			}
+		}
+	}
 
-type dog struct{}
+	eq(0, 0)
+	neq(1, 0)
+	eq(nil, nil)
+	eq(int8(2), uint64(2))
+	eq(float32(1.2), float64(1.2))
+	eq(complex(1, 2), complex(1, 2))
+	neq(complex(1, 2), complex(1, 456))
+	eq(complex64(complex(1, 2)), complex128(complex(1, 2)))
+	eq(4, 4.0)
+	eq(-4.0, -4)
+	neq(1.2, "1.2")
+	var i, j int
+	eq(&i, &i)
+	eq(&i, &j)
+	eq(1.2, 1.20000001)
+	neq(uint64(0xFFFFFFFFFFFFFFFF), int64(-1))
+	eq(int32(5), int8(5))
+	eq(uint32(5), uint64(5))
+	eq(uint64(5), uint64(5))
+	neq(uint64(500), uint64(5))
+	eq(2.0, uint64(2))
+	eq("abc", "abc")
+	neq("abc", "ABC")
 
-func (*dog) f() {}
+	var s1, s2 struct{ a int }
+	eq(s1, s1)
+	eq(s1, s2)
+	s2.a = 111
+	neq(s1, s2)
+
+	p1 := unsafe.Pointer(&s1)
+	p2 := unsafe.Pointer(&s2)
+	eq(p1, p1)
+	neq(p1, p2)
+	neq(p1, &p1)
+	eq(&p1, &p1)
+
+	eq(true, true)
+	neq(true, false)
+
+	eq(eq, eq)
+	neq(eq, neq)
+	var nilF func()
+	eq(nilF, nilF)
+
+	eq([]int{1, 2, 3}, []int{1, 2, 3})
+	neq([]int{1, 2, 3}, []int{1, 2})
+	neq([]int{1, 2, 3}, []int{1, 2, 4})
+	neq([]int{1, 2, 3}, []int(nil))
+	slice := []int{1, 2, 3}
+	eq(slice, slice)
+
+	var ints2 [2]int
+	var ints3 [3]int
+	eq(ints2, ints2)
+	neq(ints2, ints3)
+	neq([2]int{1, 2}, [2]int{1, 3})
+
+	var nilMap map[int]string
+	m1 := map[int]string{1: "abc"}
+	m2 := map[int]string{1: "abc", 2: "def"}
+	m22 := map[int]string{1: "abc", 2: "def"}
+	m3 := map[int]string{1: "abc", 2: "DEF"}
+	eq(m1, m1)
+	neq(m1, m2)
+	neq(nilMap, m1)
+	eq(nilMap, nilMap)
+	neq(m2, m3)
+	eq(m2, m22)
+
+	type bbb struct{}
+	type aaa struct {
+		bbb
+		u unsafe.Pointer
+		i interface {
+			a()
+		}
+	}
+	var aa1, aa2 aaa
+	eq(aa1, aa2)
+	aa1.u = unsafe.Pointer(&aa1)
+	aa2.u = unsafe.Pointer(&aa2)
+	eq(aa1, aa1)
+	neq(aa1, aa2)
+
+	aa2.u = aa1.u
+	eq(aa1, aa2)
+
+	aa1.i = aer{i: 1}
+	aa2.i = aer{i: 1}
+	eq(aa1, aa2)
+
+	aa1.i = aer{i: 1}
+	aa2.i = aer{i: 2}
+	neq(aa1, aa2)
+}
+
+type aer struct{ i int }
+
+func (aer) a() {}

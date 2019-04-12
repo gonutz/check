@@ -4,9 +4,13 @@ import (
 	"fmt"
 	"math"
 	"reflect"
-	"testing"
 	"unsafe"
 )
+
+type tester interface {
+	Helper()
+	Errorf(format string, a ...interface{})
+}
 
 // Eq compares a and b and calls Errorf on t if they differ. Values are compared
 // in a deep way, similar to reflect.DeepEqual, only that float and complex
@@ -14,7 +18,7 @@ import (
 // If there are any msg parameters, they are printed in concatenation before the
 // error message, e.g. if you pass ["input ", 5] as msg, errors will be printed
 // as: "input 5: <error>".
-func Eq(t *testing.T, a, b interface{}, msg ...interface{}) {
+func Eq(t tester, a, b interface{}, msg ...interface{}) {
 	t.Helper()
 	EqEps(t, a, b, 1e-6, msg...)
 }
@@ -25,7 +29,7 @@ func Eq(t *testing.T, a, b interface{}, msg ...interface{}) {
 // If there are any msg parameters, they are printed in concatenation before the
 // error message, e.g. if you pass ["input ", 5] as msg, errors will be printed
 // as: "input 5: <error>".
-func EqExact(t *testing.T, a, b interface{}, msg ...interface{}) {
+func EqExact(t tester, a, b interface{}, msg ...interface{}) {
 	t.Helper()
 	EqEps(t, a, b, 0, msg...)
 }
@@ -38,7 +42,7 @@ func EqExact(t *testing.T, a, b interface{}, msg ...interface{}) {
 // If there are any msg parameters, they are printed in concatenation before the
 // error message, e.g. if you pass ["input ", 5] as msg, errors will be printed
 // as: "input 5: <error>".
-func EqEps(t *testing.T, a, b interface{}, epsilon float64, msg ...interface{}) {
+func EqEps(t tester, a, b interface{}, epsilon float64, msg ...interface{}) {
 	t.Helper()
 	if !deepEqual(a, b, epsilon) {
 		errorf(t, "!=", a, b, msg...)
@@ -51,7 +55,7 @@ func EqEps(t *testing.T, a, b interface{}, epsilon float64, msg ...interface{}) 
 // If there are any msg parameters, they are printed in concatenation before the
 // error message, e.g. if you pass ["input ", 5] as msg, errors will be printed
 // as: "input 5: <error>".
-func Neq(t *testing.T, a, b interface{}, msg ...interface{}) {
+func Neq(t tester, a, b interface{}, msg ...interface{}) {
 	t.Helper()
 	NeqEps(t, a, b, 1e-6, msg...)
 }
@@ -62,7 +66,7 @@ func Neq(t *testing.T, a, b interface{}, msg ...interface{}) {
 // If there are any msg parameters, they are printed in concatenation before the
 // error message, e.g. if you pass ["input ", 5] as msg, errors will be printed
 // as: "input 5: <error>".
-func NeqExact(t *testing.T, a, b interface{}, msg ...interface{}) {
+func NeqExact(t tester, a, b interface{}, msg ...interface{}) {
 	t.Helper()
 	NeqEps(t, a, b, 0, msg...)
 }
@@ -75,14 +79,14 @@ func NeqExact(t *testing.T, a, b interface{}, msg ...interface{}) {
 // If there are any msg parameters, they are printed in concatenation before the
 // error message, e.g. if you pass ["input ", 5] as msg, errors will be printed
 // as: "input 5: <error>".
-func NeqEps(t *testing.T, a, b interface{}, epsilon float64, msg ...interface{}) {
+func NeqEps(t tester, a, b interface{}, epsilon float64, msg ...interface{}) {
 	t.Helper()
 	if deepEqual(a, b, epsilon) {
 		errorf(t, "==", a, b, msg...)
 	}
 }
 
-func errorf(t *testing.T, op string, a, b interface{}, msg ...interface{}) {
+func errorf(t tester, op string, a, b interface{}, msg ...interface{}) {
 	t.Helper()
 	var prefix string
 	if len(msg) > 0 {
@@ -103,11 +107,29 @@ func deepEqual(x, y interface{}, epsilon float64) bool {
 		return deepValueEqual(v1, v2, epsilon, make(map[visit]bool), 0)
 	}
 	// in case we have different types, we might still be able to check them,
-	// e.g. compare float32 and float64 or uint8 and uint16
+	// e.g. compare float32 and float64 or int8 and uint16
 	if isInteger(v1) && isInteger(v2) {
+		// we might need to compare signed with unsigned
+		v1Signed := isSignedInteger(v1)
+		if v1Signed != isSignedInteger(v2) {
+			// one signed type, one unsigned; make sure the unsigned type is v1
+			if v1Signed {
+				v1, v2 = v2, v1
+			}
+			// v1: unsigned type
+			// v2: signed type
+			i2 := v2.Int()
+			if i2 < 0 {
+				return false // cannot compare to always-positive uint
+			}
+			u1 := v1.Uint()
+			return u1 == uint64(i2)
+		}
+		// at this point either both are signed or both are unsigned, thus using
+		// their uint64 bit pattern should match
 		return toUint64(v1) == toUint64(v2)
 	}
-	if isFloat(v1) && isFloat(v1) {
+	if isFloat(v1) && isFloat(v2) {
 		return floatEq(v1.Float(), v2.Float(), epsilon)
 	}
 	if isComplex(v1) && isComplex(v1) {
@@ -121,7 +143,7 @@ func deepEqual(x, y interface{}, epsilon float64) bool {
 		v1, v2 = v2, v1
 	}
 	if isInteger(v1) && isFloat(v2) {
-		f1 := float64(toUint64(v1))
+		f1 := intToFloat64(v1)
 		f2 := v2.Float()
 		return floatEq(f1, f2, epsilon)
 	}
@@ -129,11 +151,11 @@ func deepEqual(x, y interface{}, epsilon float64) bool {
 }
 
 func isInteger(v reflect.Value) bool {
-	k := v.Type().Kind()
-	return isSignedInteger(k) || isUnsignedInteger(k)
+	return isSignedInteger(v) || isUnsignedInteger(v)
 }
 
-func isSignedInteger(k reflect.Kind) bool {
+func isSignedInteger(v reflect.Value) bool {
+	k := v.Type().Kind()
 	return k == reflect.Int ||
 		k == reflect.Int8 ||
 		k == reflect.Int16 ||
@@ -141,7 +163,8 @@ func isSignedInteger(k reflect.Kind) bool {
 		k == reflect.Int64
 }
 
-func isUnsignedInteger(k reflect.Kind) bool {
+func isUnsignedInteger(v reflect.Value) bool {
+	k := v.Type().Kind()
 	return k == reflect.Uint ||
 		k == reflect.Uint8 ||
 		k == reflect.Uint16 ||
@@ -151,10 +174,17 @@ func isUnsignedInteger(k reflect.Kind) bool {
 }
 
 func toUint64(v reflect.Value) uint64 {
-	if isSignedInteger(v.Type().Kind()) {
+	if isSignedInteger(v) {
 		return uint64(v.Int())
 	}
 	return v.Uint()
+}
+
+func intToFloat64(v reflect.Value) float64 {
+	if isSignedInteger(v) {
+		return float64(v.Int())
+	}
+	return float64(v.Uint())
 }
 
 func isFloat(v reflect.Value) bool {
@@ -312,8 +342,7 @@ func deepValueEqual(v1, v2 reflect.Value, eps float64, visited map[visit]bool, d
 	case reflect.String:
 		return v2.Kind() == reflect.String && v1.String() == v2.String()
 	case reflect.UnsafePointer:
-		return v2.Kind() == reflect.UnsafePointer &&
-			v1.UnsafeAddr() == v2.UnsafeAddr()
+		return v2.Kind() == reflect.UnsafePointer && v1.Pointer() == v2.Pointer()
 	default:
 		return false
 	}
