@@ -71,7 +71,7 @@ complex depeding on the type.
 Floating point values can usually not be compared with == because of rounding
 errors. You want to have an epsilon by which the values might diverge from each
 other and still be considered equal. Furthermore, what about INF and NAN?
-Comparing slices and maps means you must comapre their lengths and iterate over
+Comparing slices and maps means you must compare their lengths and iterate over
 them to check each item for equality.
 Nested structs and interfaces can get hairy pretty quickly.
 
