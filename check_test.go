@@ -18,11 +18,10 @@ func (t *mockTester) Errorf(format string, a ...interface{}) {
 }
 
 func TestEq(t *testing.T) {
-	// eq and neq make sure that check.Eq triggers/stays silent
 	eq := func(a, b interface{}) {
 		t.Helper()
 		{
-			// check Eq
+			// check Eq(a,b) prints no error
 			var tt mockTester
 			check.Eq(&tt, a, b)
 			if tt.err != "" {
@@ -30,17 +29,34 @@ func TestEq(t *testing.T) {
 			}
 		}
 		{
-			// check Neq
+			// check Eq(b,a) prints no error
+			var tt mockTester
+			check.Eq(&tt, b, a)
+			if tt.err != "" {
+				t.Errorf("%v == %v but error for Eq was %q", b, a, tt.err)
+			}
+		}
+		{
+			// check Neq(a,b) prints an error
 			var tt mockTester
 			check.Neq(&tt, a, b)
 			if tt.err == "" {
 				t.Errorf("%v != %v but have no error for Neq", a, b)
 			}
 		}
+		{
+			// check Neq(b,a) prints an error
+			var tt mockTester
+			check.Neq(&tt, b, a)
+			if tt.err == "" {
+				t.Errorf("%v != %v but have no error for Neq", b, a)
+			}
+		}
 	}
 	neq := func(a, b interface{}) {
 		t.Helper()
 		{
+			// check Eq(a,b) prints an error
 			var tt mockTester
 			check.Eq(&tt, a, b)
 			if tt.err == "" {
@@ -48,10 +64,27 @@ func TestEq(t *testing.T) {
 			}
 		}
 		{
+			// check Eq(b,a) prints an error
+			var tt mockTester
+			check.Eq(&tt, b, a)
+			if tt.err == "" {
+				t.Errorf("%v != %v but have no error for Eq", b, a)
+			}
+		}
+		{
+			// check Neq(a,b) prints no error
 			var tt mockTester
 			check.Neq(&tt, a, b)
 			if tt.err != "" {
 				t.Errorf("%v == %v but error for Neq was %q", a, b, tt.err)
+			}
+		}
+		{
+			// check Neq(b,a) prints no error
+			var tt mockTester
+			check.Neq(&tt, b, a)
+			if tt.err != "" {
+				t.Errorf("%v == %v but error for Neq was %q", b, a, tt.err)
 			}
 		}
 	}
@@ -75,7 +108,7 @@ func TestEq(t *testing.T) {
 	eq(int32(5), int8(5))
 	eq(uint32(5), uint64(5))
 	eq(uint64(5), uint64(5))
-	neq(uint64(500), uint64(5))
+	neq(uint64(999), uint64(5))
 	eq(2.0, uint64(2))
 	eq("abc", "abc")
 	neq("abc", "ABC")
@@ -151,6 +184,16 @@ func TestEq(t *testing.T) {
 	aa1.i = aer{i: 1}
 	aa2.i = aer{i: 2}
 	neq(aa1, aa2)
+
+	neq([]interface{}{""}, []interface{}{5})
+	eq([]interface{}{7.0, 6.0, 5.0}, []interface{}{7, 6, 5})
+
+	eq("abc", "abc")
+	eq("abc", []byte("abc"))
+	eq("abc", []rune("abc"))
+	neq("XXX", "abc")
+	neq("XXX", []byte("abc"))
+	neq("XXX", []rune("abc"))
 }
 
 type aer struct{ i int }

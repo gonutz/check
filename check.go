@@ -1,6 +1,7 @@
 package check
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"reflect"
@@ -101,53 +102,200 @@ func deepEqual(x, y interface{}, epsilon float64) bool {
 	if x == nil || y == nil {
 		return x == y
 	}
-	v1 := reflect.ValueOf(x)
-	v2 := reflect.ValueOf(y)
-	if v1.Type() == v2.Type() {
-		return deepValueEqual(v1, v2, epsilon, make(map[visit]bool), 0)
-	}
-	// in case we have different types, we might still be able to check them,
-	// e.g. compare float32 and float64 or int8 and uint16
-	if isInteger(v1) && isInteger(v2) {
-		// we might need to compare signed with unsigned
-		v1Signed := isSignedInteger(v1)
-		if v1Signed != isSignedInteger(v2) {
-			// one signed type, one unsigned; make sure the unsigned type is v1
-			if v1Signed {
-				v1, v2 = v2, v1
-			}
-			// v1: unsigned type
-			// v2: signed type
-			i2 := v2.Int()
-			if i2 < 0 {
-				return false // cannot compare to always-positive uint
-			}
-			u1 := v1.Uint()
-			return u1 == uint64(i2)
+	return deepValueEqual(
+		reflect.ValueOf(x),
+		reflect.ValueOf(y),
+		epsilon,
+		make(map[visit]bool),
+	)
+}
+
+func deepValueEqual(v1, v2 reflect.Value, eps float64, visited map[visit]bool) bool {
+	if v1.Type() != v2.Type() {
+		if canBeString(v1) && canBeString(v2) {
+			return bytes.Equal(toBytes(v1), toBytes(v2))
 		}
-		// at this point either both are signed or both are unsigned, thus using
-		// their uint64 bit pattern should match
-		return toUint64(v1) == toUint64(v2)
+		if isInteger(v1) && isInteger(v2) {
+			// We might need to compare signed with unsigned.
+			v1Signed := isSignedInteger(v1)
+			if v1Signed != isSignedInteger(v2) {
+				// One signed, one unsigned; make sure the unsigned type is v1.
+				if v1Signed {
+					v1, v2 = v2, v1
+				}
+				// v1: unsigned type
+				// v2: signed type
+				i2 := v2.Int()
+				if i2 < 0 {
+					return false // v2 is unsigned, thus always >= 0
+				}
+				u1 := v1.Uint()
+				return u1 == uint64(i2)
+			}
+			// At this point either both are signed or both are unsigned, thus
+			// their uint64 bit patterns should match.
+			return toUint64(v1) == toUint64(v2)
+		}
+		if isFloat(v1) && isFloat(v2) {
+			return floatEq(v1.Float(), v2.Float(), eps)
+		}
+		if isComplex(v1) && isComplex(v1) {
+			c1 := v1.Complex()
+			c2 := v2.Complex()
+			return floatEq(real(c1), real(c2), eps) &&
+				floatEq(imag(c1), imag(c2), eps)
+		}
+		// check for integer to float comparison, make the integer be v1
+		if isInteger(v2) {
+			v1, v2 = v2, v1
+		}
+		if isInteger(v1) && isFloat(v2) {
+			f1 := intToFloat64(v1)
+			f2 := v2.Float()
+			return floatEq(f1, f2, eps)
+		}
+		return false
 	}
-	if isFloat(v1) && isFloat(v2) {
-		return floatEq(v1.Float(), v2.Float(), epsilon)
+
+	// At this point we compare two values of the same type.
+
+	// We want to avoid putting more in the visited map than we need to.
+	// For any possible reference cycle that might be encountered,
+	// hard(t) needs to return true for at least one of the types in the cycle.
+	hard := func(k reflect.Kind) bool {
+		switch k {
+		case reflect.Map, reflect.Slice, reflect.Ptr, reflect.Interface:
+			return true
+		}
+		return false
 	}
-	if isComplex(v1) && isComplex(v1) {
-		c1 := v1.Complex()
-		c2 := v2.Complex()
-		return floatEq(real(c1), real(c2), epsilon) &&
-			floatEq(imag(c1), imag(c2), epsilon)
+
+	if v1.CanAddr() && v2.CanAddr() && hard(v1.Kind()) {
+		addr1 := unsafe.Pointer(v1.UnsafeAddr())
+		addr2 := unsafe.Pointer(v2.UnsafeAddr())
+		if uintptr(addr1) > uintptr(addr2) {
+			// Canonicalize order to reduce number of entries in visited.
+			// Assumes non-moving garbage collector.
+			addr1, addr2 = addr2, addr1
+		}
+
+		// Short circuit if references are already seen.
+		typ := v1.Type()
+		v := visit{addr1, addr2, typ}
+		if visited[v] {
+			return true
+		}
+
+		// Remember for later.
+		visited[v] = true
 	}
-	// check for integer to float comparison, make the integer be v1
-	if isInteger(v2) {
-		v1, v2 = v2, v1
+
+	switch v1.Kind() {
+	case reflect.Array:
+		// v1 and v2 have the same type, the length of the array is part of its
+		// type, thus we need not compare their lengths.
+		for i := 0; i < v1.Len(); i++ {
+			if !deepValueEqual(v1.Index(i), v2.Index(i), eps, visited) {
+				return false
+			}
+		}
+		return true
+	case reflect.Slice:
+		if v1.IsNil() != v2.IsNil() {
+			return false
+		}
+		if v1.Len() != v2.Len() {
+			return false
+		}
+		if v1.Pointer() == v2.Pointer() {
+			return true
+		}
+		for i := 0; i < v1.Len(); i++ {
+			if !deepValueEqual(v1.Index(i), v2.Index(i), eps, visited) {
+				return false
+			}
+		}
+		return true
+	case reflect.Interface:
+		if v1.IsNil() || v2.IsNil() {
+			return v1.IsNil() == v2.IsNil()
+		}
+		return deepValueEqual(v1.Elem(), v2.Elem(), eps, visited)
+	case reflect.Ptr:
+		if v1.Pointer() == v2.Pointer() {
+			return true
+		}
+		return deepValueEqual(v1.Elem(), v2.Elem(), eps, visited)
+	case reflect.Struct:
+		for i, n := 0, v1.NumField(); i < n; i++ {
+			if !deepValueEqual(v1.Field(i), v2.Field(i), eps, visited) {
+				return false
+			}
+		}
+		return true
+	case reflect.Map:
+		if v1.IsNil() != v2.IsNil() {
+			return false
+		}
+		if v1.Len() != v2.Len() {
+			return false
+		}
+		if v1.Pointer() == v2.Pointer() {
+			return true
+		}
+		for _, k := range v1.MapKeys() {
+			val1 := v1.MapIndex(k)
+			val2 := v2.MapIndex(k)
+			if !val1.IsValid() ||
+				!val2.IsValid() ||
+				!deepValueEqual(v1.MapIndex(k), v2.MapIndex(k), eps, visited) {
+				return false
+			}
+		}
+		return true
+	case reflect.Func:
+		if v1.IsNil() && v2.IsNil() {
+			return true
+		}
+		return v1.Pointer() == v2.Pointer()
+	case reflect.Bool:
+		return v2.Kind() == reflect.Bool && v1.Bool() == v2.Bool()
+	case reflect.Uint,
+		reflect.Uint8,
+		reflect.Uint16,
+		reflect.Uint32,
+		reflect.Uint64,
+		reflect.Uintptr:
+		k2 := v2.Kind()
+		return (k2 == reflect.Uint ||
+			k2 == reflect.Uint8 ||
+			k2 == reflect.Uint16 ||
+			k2 == reflect.Uint32 ||
+			k2 == reflect.Uint64 ||
+			k2 == reflect.Uintptr) && v1.Uint() == v2.Uint()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		k2 := v2.Kind()
+		return (k2 == reflect.Int ||
+			k2 == reflect.Int8 ||
+			k2 == reflect.Int16 ||
+			k2 == reflect.Int32 ||
+			k2 == reflect.Int64) && v1.Int() == v2.Int()
+	case reflect.Float32, reflect.Float64:
+		k2 := v2.Kind()
+		return (k2 == reflect.Float32 || k2 == reflect.Float64) &&
+			floatEq(v1.Float(), v2.Float(), eps)
+	case reflect.Complex64, reflect.Complex128:
+		k2 := v2.Kind()
+		return (k2 == reflect.Complex64 || k2 == reflect.Complex128) &&
+			floatEq(real(v1.Complex()), real(v2.Complex()), eps) &&
+			floatEq(imag(v1.Complex()), imag(v2.Complex()), eps)
+	case reflect.String:
+		return v2.Kind() == reflect.String && v1.String() == v2.String()
+	case reflect.UnsafePointer:
+		return v2.Kind() == reflect.UnsafePointer && v1.Pointer() == v2.Pointer()
+	default:
+		return false
 	}
-	if isInteger(v1) && isFloat(v2) {
-		f1 := intToFloat64(v1)
-		f2 := v2.Float()
-		return floatEq(f1, f2, epsilon)
-	}
-	return false
 }
 
 func isInteger(v reflect.Value) bool {
@@ -203,151 +351,6 @@ type visit struct {
 	typ reflect.Type
 }
 
-func deepValueEqual(v1, v2 reflect.Value, eps float64, visited map[visit]bool, depth int) bool {
-	if !v1.IsValid() || !v2.IsValid() {
-		return v1.IsValid() == v2.IsValid()
-	}
-	if v1.Type() != v2.Type() {
-		return false
-	}
-
-	// We want to avoid putting more in the visited map than we need to.
-	// For any possible reference cycle that might be encountered,
-	// hard(t) needs to return true for at least one of the types in the cycle.
-	hard := func(k reflect.Kind) bool {
-		switch k {
-		case reflect.Map, reflect.Slice, reflect.Ptr, reflect.Interface:
-			return true
-		}
-		return false
-	}
-
-	if v1.CanAddr() && v2.CanAddr() && hard(v1.Kind()) {
-		addr1 := unsafe.Pointer(v1.UnsafeAddr())
-		addr2 := unsafe.Pointer(v2.UnsafeAddr())
-		if uintptr(addr1) > uintptr(addr2) {
-			// Canonicalize order to reduce number of entries in visited.
-			// Assumes non-moving garbage collector.
-			addr1, addr2 = addr2, addr1
-		}
-
-		// Short circuit if references are already seen.
-		typ := v1.Type()
-		v := visit{addr1, addr2, typ}
-		if visited[v] {
-			return true
-		}
-
-		// Remember for later.
-		visited[v] = true
-	}
-
-	switch v1.Kind() {
-	case reflect.Array:
-		for i := 0; i < v1.Len(); i++ {
-			if !deepValueEqual(v1.Index(i), v2.Index(i), eps, visited, depth+1) {
-				return false
-			}
-		}
-		return true
-	case reflect.Slice:
-		if v1.IsNil() != v2.IsNil() {
-			return false
-		}
-		if v1.Len() != v2.Len() {
-			return false
-		}
-		if v1.Pointer() == v2.Pointer() {
-			return true
-		}
-		for i := 0; i < v1.Len(); i++ {
-			if !deepValueEqual(v1.Index(i), v2.Index(i), eps, visited, depth+1) {
-				return false
-			}
-		}
-		return true
-	case reflect.Interface:
-		if v1.IsNil() || v2.IsNil() {
-			return v1.IsNil() == v2.IsNil()
-		}
-		return deepValueEqual(v1.Elem(), v2.Elem(), eps, visited, depth+1)
-	case reflect.Ptr:
-		if v1.Pointer() == v2.Pointer() {
-			return true
-		}
-		return deepValueEqual(v1.Elem(), v2.Elem(), eps, visited, depth+1)
-	case reflect.Struct:
-		for i, n := 0, v1.NumField(); i < n; i++ {
-			if !deepValueEqual(v1.Field(i), v2.Field(i), eps, visited, depth+1) {
-				return false
-			}
-		}
-		return true
-	case reflect.Map:
-		if v1.IsNil() != v2.IsNil() {
-			return false
-		}
-		if v1.Len() != v2.Len() {
-			return false
-		}
-		if v1.Pointer() == v2.Pointer() {
-			return true
-		}
-		for _, k := range v1.MapKeys() {
-			val1 := v1.MapIndex(k)
-			val2 := v2.MapIndex(k)
-			if !val1.IsValid() ||
-				!val2.IsValid() ||
-				!deepValueEqual(v1.MapIndex(k), v2.MapIndex(k), eps, visited, depth+1) {
-				return false
-			}
-		}
-		return true
-	case reflect.Func:
-		if v1.IsNil() && v2.IsNil() {
-			return true
-		}
-		return v1.Pointer() == v2.Pointer()
-	case reflect.Bool:
-		return v2.Kind() == reflect.Bool && v1.Bool() == v2.Bool()
-	case reflect.Uint,
-		reflect.Uint8,
-		reflect.Uint16,
-		reflect.Uint32,
-		reflect.Uint64,
-		reflect.Uintptr:
-		k2 := v2.Kind()
-		return (k2 == reflect.Uint ||
-			k2 == reflect.Uint8 ||
-			k2 == reflect.Uint16 ||
-			k2 == reflect.Uint32 ||
-			k2 == reflect.Uint64 ||
-			k2 == reflect.Uintptr) && v1.Uint() == v2.Uint()
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		k2 := v2.Kind()
-		return (k2 == reflect.Int ||
-			k2 == reflect.Int8 ||
-			k2 == reflect.Int16 ||
-			k2 == reflect.Int32 ||
-			k2 == reflect.Int64) && v1.Int() == v2.Int()
-	case reflect.Float32, reflect.Float64:
-		k2 := v2.Kind()
-		return (k2 == reflect.Float32 || k2 == reflect.Float64) &&
-			floatEq(v1.Float(), v2.Float(), eps)
-	case reflect.Complex64, reflect.Complex128:
-		k2 := v2.Kind()
-		return (k2 == reflect.Complex64 || k2 == reflect.Complex128) &&
-			floatEq(real(v1.Complex()), real(v2.Complex()), eps) &&
-			floatEq(imag(v1.Complex()), imag(v2.Complex()), eps)
-	case reflect.String:
-		return v2.Kind() == reflect.String && v1.String() == v2.String()
-	case reflect.UnsafePointer:
-		return v2.Kind() == reflect.UnsafePointer && v1.Pointer() == v2.Pointer()
-	default:
-		return false
-	}
-}
-
 func floatEq(a, b, eps float64) bool {
 	return math.IsInf(a, 1) && math.IsInf(b, 1) ||
 		math.IsInf(a, -1) && math.IsInf(b, -1) ||
@@ -360,4 +363,26 @@ func abs(x float64) float64 {
 		return -x
 	}
 	return x
+}
+
+func canBeString(v reflect.Value) bool {
+	if v.Kind() == reflect.String {
+		return true
+	}
+	if v.Kind() == reflect.Slice {
+		// byte or rune slices can be converted to string
+		return v.Type().Elem().Kind() == reflect.Uint8 || v.Type().Elem().Kind() == reflect.Int32
+	}
+	return false
+}
+
+func toBytes(v reflect.Value) []byte {
+	if v.Kind() == reflect.String {
+		return []byte(v.String())
+	}
+	if v.Type().Elem().Kind() == reflect.Uint8 {
+		return v.Bytes()
+	}
+	// in this case we have a rune slice
+	return []byte(string(v.Interface().([]rune)))
 }
