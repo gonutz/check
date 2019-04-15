@@ -8,9 +8,18 @@ import (
 	"unsafe"
 )
 
-type tester interface {
-	Helper()
+// Tester wraps the Errorf message which is used to print error messages in case
+// a check fails.
+// *testing.T fulfills the Tester interface.
+type Tester interface {
 	Errorf(format string, a ...interface{})
+}
+
+// *testing.T only started supporting the Helper() function in Go 1.9. To
+// support older versions we query the helper interface at runtime and only call
+// Helper if it is available.
+type helper interface {
+	Helper()
 }
 
 // Eq compares a and b and calls Errorf on t if they differ. Values are compared
@@ -19,8 +28,10 @@ type tester interface {
 // If there are any msg parameters, they are printed in concatenation before the
 // error message, e.g. if you pass ["input ", 5] as msg, errors will be printed
 // as: "input 5: <error>".
-func Eq(t tester, a, b interface{}, msg ...interface{}) {
-	t.Helper()
+func Eq(t Tester, a, b interface{}, msg ...interface{}) {
+	if h, ok := t.(helper); ok {
+		h.Helper()
+	}
 	EqEps(t, a, b, 1e-6, msg...)
 }
 
@@ -30,8 +41,10 @@ func Eq(t tester, a, b interface{}, msg ...interface{}) {
 // If there are any msg parameters, they are printed in concatenation before the
 // error message, e.g. if you pass ["input ", 5] as msg, errors will be printed
 // as: "input 5: <error>".
-func EqExact(t tester, a, b interface{}, msg ...interface{}) {
-	t.Helper()
+func EqExact(t Tester, a, b interface{}, msg ...interface{}) {
+	if h, ok := t.(helper); ok {
+		h.Helper()
+	}
 	EqEps(t, a, b, 0, msg...)
 }
 
@@ -43,8 +56,10 @@ func EqExact(t tester, a, b interface{}, msg ...interface{}) {
 // If there are any msg parameters, they are printed in concatenation before the
 // error message, e.g. if you pass ["input ", 5] as msg, errors will be printed
 // as: "input 5: <error>".
-func EqEps(t tester, a, b interface{}, epsilon float64, msg ...interface{}) {
-	t.Helper()
+func EqEps(t Tester, a, b interface{}, epsilon float64, msg ...interface{}) {
+	if h, ok := t.(helper); ok {
+		h.Helper()
+	}
 	if !deepEqual(a, b, epsilon) {
 		errorf(t, "!=", a, b, msg...)
 	}
@@ -56,8 +71,10 @@ func EqEps(t tester, a, b interface{}, epsilon float64, msg ...interface{}) {
 // If there are any msg parameters, they are printed in concatenation before the
 // error message, e.g. if you pass ["input ", 5] as msg, errors will be printed
 // as: "input 5: <error>".
-func Neq(t tester, a, b interface{}, msg ...interface{}) {
-	t.Helper()
+func Neq(t Tester, a, b interface{}, msg ...interface{}) {
+	if h, ok := t.(helper); ok {
+		h.Helper()
+	}
 	NeqEps(t, a, b, 1e-6, msg...)
 }
 
@@ -67,8 +84,10 @@ func Neq(t tester, a, b interface{}, msg ...interface{}) {
 // If there are any msg parameters, they are printed in concatenation before the
 // error message, e.g. if you pass ["input ", 5] as msg, errors will be printed
 // as: "input 5: <error>".
-func NeqExact(t tester, a, b interface{}, msg ...interface{}) {
-	t.Helper()
+func NeqExact(t Tester, a, b interface{}, msg ...interface{}) {
+	if h, ok := t.(helper); ok {
+		h.Helper()
+	}
 	NeqEps(t, a, b, 0, msg...)
 }
 
@@ -80,15 +99,19 @@ func NeqExact(t tester, a, b interface{}, msg ...interface{}) {
 // If there are any msg parameters, they are printed in concatenation before the
 // error message, e.g. if you pass ["input ", 5] as msg, errors will be printed
 // as: "input 5: <error>".
-func NeqEps(t tester, a, b interface{}, epsilon float64, msg ...interface{}) {
-	t.Helper()
+func NeqEps(t Tester, a, b interface{}, epsilon float64, msg ...interface{}) {
+	if h, ok := t.(helper); ok {
+		h.Helper()
+	}
 	if deepEqual(a, b, epsilon) {
 		errorf(t, "==", a, b, msg...)
 	}
 }
 
-func errorf(t tester, op string, a, b interface{}, msg ...interface{}) {
-	t.Helper()
+func errorf(t Tester, op string, a, b interface{}, msg ...interface{}) {
+	if h, ok := t.(helper); ok {
+		h.Helper()
+	}
 	var prefix string
 	if len(msg) > 0 {
 		prefix = fmt.Sprint(msg...) + ": "

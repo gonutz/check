@@ -12,7 +12,6 @@ type mockTester struct {
 	err string
 }
 
-func (t *mockTester) Helper() {}
 func (t *mockTester) Errorf(format string, a ...interface{}) {
 	t.err = fmt.Sprintf(format, a...)
 }
