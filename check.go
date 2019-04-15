@@ -1,3 +1,58 @@
+/*
+Package check implements easy to use functions to write your tests in a concise
+way.
+
+In the past I have used if-statements to compare values for equality, for
+example:
+
+	func Test(t *testing.T) {
+		sum := add(1, 2)
+		if sum != 3 {
+			t.Errorf("1+2 = 3 but got %v", sum)
+		}
+	}
+
+This would soon get tedious and copy paste errors for the error messages would
+creep in. Thus I would create a helper function to compare two integers, like
+this:
+
+	func checkInts(t *testing.T, msg string, have, want int) {
+		if have != want {
+			t.Errorf("%s: %v != %v", msg, have, want)
+		}
+	}
+
+Since there are no generics in Go, I would have to write a helper for all types
+of values that I wanted to compare: int, uint, byte, float32, []byte, map, etc.
+The functions to implement comparison for equality of two values can get more
+complex depeding on the type.
+Floating point values can usually not be compared with == because of rounding
+errors. You want to have an epsilon by which the values might diverge from each
+other and still be considered equal. Furthermore, what about INF and NAN?
+Comparing slices and maps means you must comapre their lengths and iterate over
+them to check each item for equality.
+Nested structs and interfaces can get hairy pretty quickly.
+
+To get over these problems once and for all I created this package. It aims at a
+minimal API with maximum usability. You can only check for equality or
+non-equality with the Eq and Neq functions.
+
+The above example becomes:
+
+	func Test(t *testing.T) {
+		sum := add(1, 2)
+		check.Eq(t, sum, 3, "1+2")
+	}
+
+It does not matter whether the add function returns an int, a uint32, a byte or
+a float64. Eq and Neq compare values in a deep way while handling different
+integer types, floating point accuracy, INF and NAN and comparison between
+string, []byte and []rune.
+
+This package will not solve all your testing needs but probably 95% of it. You
+can still write if-statements or special helpers for the cases where simple
+equality of values does not fit your needs.
+*/
 package check
 
 import (
