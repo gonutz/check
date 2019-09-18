@@ -186,6 +186,15 @@ func TestEqAndNeq(t *testing.T) {
 	neq(p1, &p1)
 	eq(&p1, &p1)
 	eq(nil, nil)
+
+	// empty slices are nil
+	s := make([]int, 0)
+	eq(s, nil)
+	eq(nil, s)
+	eq(nil, []int{})
+	eq([]int{}, nil)
+	eq([]int{}, s)
+	eq(s, []int{})
 }
 
 type aer struct{ i int }

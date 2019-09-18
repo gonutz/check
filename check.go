@@ -177,8 +177,18 @@ func errorf(t Tester, op string, a, b interface{}, msg ...interface{}) {
 // deepEqual is a modified version of reflect.DeepEqual. deepEqual compares
 // float and complex values using epsilon.
 func deepEqual(x, y interface{}, epsilon float64) bool {
-	if x == nil || y == nil {
-		return x == y
+	if x == nil && y == nil {
+		return true
+	}
+	if y == nil {
+		x, y = y, x
+	}
+	if x == nil {
+		// y is not nil
+		y := reflect.ValueOf(y)
+		if y.Kind() == reflect.Slice {
+			return y.IsNil() || y.Len() == 0
+		}
 	}
 	return deepValueEqual(
 		reflect.ValueOf(x),
@@ -279,6 +289,12 @@ func deepValueEqual(v1, v2 reflect.Value, eps float64, visited map[visit]bool) b
 		}
 		return true
 	case reflect.Slice:
+		if v1.IsNil() && v2.Len() == 0 {
+			return true
+		}
+		if v1.Len() == 0 && v2.IsNil() {
+			return true
+		}
 		if v1.IsNil() != v2.IsNil() {
 			return false
 		}
