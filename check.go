@@ -181,13 +181,16 @@ func deepEqual(x, y interface{}, epsilon float64) bool {
 		return true
 	}
 	if y == nil {
-		x, y = y, x
+		x, y = y, x // make sure y is not nil
 	}
 	if x == nil {
 		// y is not nil
 		y := reflect.ValueOf(y)
 		if y.Kind() == reflect.Slice {
 			return y.IsNil() || y.Len() == 0
+		}
+		if y.Kind() == reflect.Ptr {
+			return true
 		}
 	}
 	return deepValueEqual(
