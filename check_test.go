@@ -188,6 +188,8 @@ func TestEqAndNeq(t *testing.T) {
 	eq(nil, nil)
 	var intPtr *int
 	eq(nil, intPtr)
+	var integer int
+	neq(&integer, nil)
 
 	// empty slices are nil
 	s := make([]int, 0)

@@ -190,7 +190,7 @@ func deepEqual(x, y interface{}, epsilon float64) bool {
 			return y.IsNil() || y.Len() == 0
 		}
 		if y.Kind() == reflect.Ptr {
-			return true
+			return y.IsNil()
 		}
 	}
 	return deepValueEqual(
