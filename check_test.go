@@ -101,10 +101,10 @@ func TestEqAndNeq(t *testing.T) {
 
 	// strings
 	eq("", "")
-	neq("abc", "ABC")
 	eq("abc", "abc")
 	eq("abc", []byte("abc"))
 	eq("abc", []rune("abc"))
+
 	neq("abc", "ABC")
 	neq("abc", []byte("ABC"))
 	neq("abc", []rune("ABC"))
