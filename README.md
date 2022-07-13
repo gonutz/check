@@ -1,35 +1,64 @@
 # Usage
 
-This is a copy of the [godoc](https://godoc.org/github.com/gonutz/check) for this package.
+This is a copy of the [godoc](https://godocs.io/github.com/gonutz/check) for
+this package.
 
 `func Eq(t Tester, a, b interface{}, msg ...interface{})`
 
-Eq compares a and b and calls Errorf on t if they differ. Values are compared in a deep way, similar to reflect.DeepEqual, only that float and complex values are compared using an epsilon of 1e-6. If there are any msg parameters, they are printed in concatenation before the error message, e.g. if you pass ["input ", 5] as msg, errors will be printed as: "input 5: <error>".
+Eq compares a and b and calls Errorf on t if they differ. Values are compared
+in a deep way, similar to reflect.DeepEqual, only that float and complex values
+are compared using an epsilon of 1e-6. If there are any msg parameters, they
+are printed in concatenation before the error message, e.g. if you pass ["input
+", 5] as msg, errors will be printed as: "input 5: <error>".
 
 
 `func EqEps(t Tester, a, b interface{}, epsilon float64, msg ...interface{})`
 
-EqEps compares a and b and calls Errorf on t if they differ. Values are compared in a deep way, similar to reflect.DeepEqual, only that float and complex values are compared using epsilon. Values are considered equal if their absolute difference is less than or equal to epsilon. Set epsilon to zero to compare for exact equality (or use EqExact). If there are any msg parameters, they are printed in concatenation before the error message, e.g. if you pass ["input ", 5] as msg, errors will be printed as: "input 5: <error>".
+EqEps compares a and b and calls Errorf on t if they differ. Values are
+compared in a deep way, similar to reflect.DeepEqual, only that float and
+complex values are compared using epsilon. Values are considered equal if their
+absolute difference is less than or equal to epsilon. Set epsilon to zero to
+compare for exact equality (or use EqExact). If there are any msg parameters,
+they are printed in concatenation before the error message, e.g. if you pass
+["input ", 5] as msg, errors will be printed as: "input 5: <error>".
 
 
 `func EqExact(t Tester, a, b interface{}, msg ...interface{})`
 
-EqExact compares a and b and calls Errorf on t if they differ. Values are compared in a deep way, similar to reflect.DeepEqual, float and complex values must match exactly. If there are any msg parameters, they are printed in concatenation before the error message, e.g. if you pass ["input ", 5] as msg, errors will be printed as: "input 5: <error>".
+EqExact compares a and b and calls Errorf on t if they differ. Values are
+compared in a deep way, similar to reflect.DeepEqual, float and complex values
+must match exactly. If there are any msg parameters, they are printed in
+concatenation before the error message, e.g. if you pass ["input ", 5] as msg,
+errors will be printed as: "input 5: <error>".
 
 
 `func Neq(t Tester, a, b interface{}, msg ...interface{})`
 
-Neq compares a and b and calls Errorf on t if they are equal. Values are compared in a deep way, similar to reflect.DeepEqual, only that float and complex values are compared using an epsilon of 1e-6. If there are any msg parameters, they are printed in concatenation before the error message, e.g. if you pass ["input ", 5] as msg, errors will be printed as: "input 5: <error>".
+Neq compares a and b and calls Errorf on t if they are equal. Values are
+compared in a deep way, similar to reflect.DeepEqual, only that float and
+complex values are compared using an epsilon of 1e-6. If there are any msg
+parameters, they are printed in concatenation before the error message, e.g. if
+you pass ["input ", 5] as msg, errors will be printed as: "input 5: <error>".
 
 
 `func NeqEps(t Tester, a, b interface{}, epsilon float64, msg ...interface{})`
 
-NeqEps compares a and b and calls Errorf on t if they are equal. Values are compared in a deep way, similar to reflect.DeepEqual, only that float and complex values are compared using epsilon. Values are considered equal if their absolute difference is less than or equal to epsilon. Set epsilon to zero to compare for exact equality (or use EqExact). If there are any msg parameters, they are printed in concatenation before the error message, e.g. if you pass ["input ", 5] as msg, errors will be printed as: "input 5: <error>".
+NeqEps compares a and b and calls Errorf on t if they are equal. Values are
+compared in a deep way, similar to reflect.DeepEqual, only that float and
+complex values are compared using epsilon. Values are considered equal if their
+absolute difference is less than or equal to epsilon. Set epsilon to zero to
+compare for exact equality (or use EqExact). If there are any msg parameters,
+they are printed in concatenation before the error message, e.g. if you pass
+["input ", 5] as msg, errors will be printed as: "input 5: <error>".
 
 
 `func NeqExact(t Tester, a, b interface{}, msg ...interface{})`
 
-NeqExact compares a and b and calls Errorf on t if they are equal. Values are compared in a deep way, similar to reflect.DeepEqual, float and complex values must match exactly. If there are any msg parameters, they are printed in concatenation before the error message, e.g. if you pass ["input ", 5] as msg, errors will be printed as: "input 5: <error>".
+NeqExact compares a and b and calls Errorf on t if they are equal. Values are
+compared in a deep way, similar to reflect.DeepEqual, float and complex values
+must match exactly. If there are any msg parameters, they are printed in
+concatenation before the error message, e.g. if you pass ["input ", 5] as msg,
+errors will be printed as: "input 5: <error>".
 
 
 Use your `*testing.T` for the `Tester` parameter.
@@ -64,8 +93,11 @@ func checkInts(t *testing.T, msg string, have, want int) {
 }
 ```
 
-Since there are no generics in Go, I would have to write a helper for all types
-of values that I wanted to compare: int, uint, byte, float32, []byte, map, etc.
+Since there were no generics in Go at the time of this packages's creation, I
+would have to write a helper for all types of values that I wanted to compare:
+int, uint, byte, float32, []byte, map, etc.
+Even with generics you would need to write a lot of specialized code, generics
+are not really much help here.
 The functions to implement comparison for equality of two values can get more
 complex depeding on the type.
 Floating point values can usually not be compared with == because of rounding
@@ -105,7 +137,8 @@ Run `go get github.com/gonutz/check` to install this library.
 
 # Note
 
-If the name `check` conflicts with something you are already using, you might rename your import to something else, like `is` or `must`:
+If the name `check` conflicts with something you are already using, you might
+rename your import to something else, like `is` or `must`:
 
 ```
 package main
