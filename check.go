@@ -192,6 +192,7 @@ func deepEqual(x, y interface{}, epsilon float64) bool {
 		if y.Kind() == reflect.Ptr {
 			return y.IsNil()
 		}
+		return false
 	}
 	return deepValueEqual(
 		reflect.ValueOf(x),
@@ -230,11 +231,33 @@ func deepValueEqual(v1, v2 reflect.Value, eps float64, visited map[visit]bool) b
 		if isFloat(v1) && isFloat(v2) {
 			return floatEq(v1.Float(), v2.Float(), eps)
 		}
-		if isComplex(v1) && isComplex(v1) {
+		if isComplex(v1) && isComplex(v2) {
 			c1 := v1.Complex()
 			c2 := v2.Complex()
 			return floatEq(real(c1), real(c2), eps) &&
 				floatEq(imag(c1), imag(c2), eps)
+		}
+		// check for int/float to complex comparison, make the complex be v2
+		if isComplex(v1) {
+			v1, v2 = v2, v1
+		}
+		if isComplex(v2) {
+			c2 := v2.Complex()
+			if imag(c2) != 0 {
+				// imaginary part is non-zero, but for integer and floats it
+				// must be zero
+				return false
+			}
+			f2 := real(c2)
+			if isInteger(v1) {
+				f1 := intToFloat64(v1)
+				return floatEq(f1, f2, eps)
+			} else if isFloat(v1) {
+				f1 := v1.Float()
+				return floatEq(f1, f2, eps)
+			} else {
+				return false
+			}
 		}
 		// check for integer to float comparison, make the integer be v1
 		if isInteger(v2) {

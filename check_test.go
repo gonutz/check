@@ -76,11 +76,17 @@ func TestEqAndNeq(t *testing.T) {
 	// numbers
 	eq(0, 0)
 	neq(1, 0)
+	neq(1, nil)
 	eq(int8(2), uint64(2))
 	eq(float32(1.2), float64(1.2))
 	eq(complex(1, 2), complex(1, 2))
 	neq(complex(1, 2), complex(1, 456))
 	eq(complex64(complex(1, 2)), complex128(complex(1, 2)))
+	eq(complex(1, 0), float32(1))
+	neq(complex(1, 9), float32(1))
+	eq(complex(1, 0), 1)
+	neq(complex(1, 9), 1)
+	neq(complex(1, 2), false)
 	eq(4, 4.0)
 	eq(-4.0, -4)
 	neq(1.2, "1.2")
@@ -200,6 +206,33 @@ func TestEqAndNeq(t *testing.T) {
 	eq([]int{}, s)
 	eq(s, []int{})
 
+	// Fuzz-test different types of values, make sure Eq and Neq do not panic.
+	values := []interface{}{
+		false, true,
+		0, -1, 1, integer, &integer,
+		complex(1, 2),
+		uintptr(0), uintptr(1),
+		unsafe.Pointer(uintptr(0)), unsafe.Pointer(uintptr(1)),
+		"", "string",
+		[]byte{}, []byte("bytes"),
+		[]rune{}, []rune("bytes"),
+		nil,
+		make(map[int]string),
+		make(chan bool),
+		aer{}, &aer{},
+		nilF, func() {}, aer{}.a,
+		[]int{}, []int{1, 2, 3},
+	}
+	for i := range values {
+		for j := i + 1; j < len(values); j++ {
+			a, b := values[i], values[j]
+			var ttEqAB mockTester
+			check.Eq(&ttEqAB, a, b)
+			check.Eq(&ttEqAB, b, a)
+			check.Neq(&ttEqAB, a, b)
+			check.Neq(&ttEqAB, b, a)
+		}
+	}
 }
 
 type aer struct{ i int }
